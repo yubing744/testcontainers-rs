@@ -85,6 +85,24 @@ impl Cli {
 
         container
     }
+
+    pub fn run_cmd<I: Image>(&self, image: impl Into<RunnableImage<I>>, args: I::Args) -> Command {
+        let image = image.into();
+
+        if let Some(network) = image.network() {
+            if self.inner.create_network_if_not_exists(network) {
+                let mut guard = self
+                    .inner
+                    .created_networks
+                    .write()
+                    .expect("failed to lock RwLock");
+
+                guard.push(network.to_owned());
+            }
+        }
+
+        Client::run_command(&image, self.inner.command(), false, args)
+    }
 }
 
 #[derive(Debug)]
@@ -150,7 +168,7 @@ impl Client {
         }
     }
 
-    fn build_run_command<I: Image>(image: &RunnableImage<I>, mut command: Command) -> Command {
+    fn run_command<I: Image>(image: &RunnableImage<I>, mut command: Command, is_daemon : bool, args: I::Args) -> Command {
         command.arg("run");
 
         if image.privileged() {
@@ -207,13 +225,20 @@ impl Client {
             command.arg(key).arg(value);
         }
 
+        if is_daemon {
+            command.arg("-d");
+        }
+
         command
-            .arg("-d") // Always run detached
             .arg(image.descriptor())
-            .args(image.args().clone().into_iterator())
+            .args(args.into_iterator())
             .stdout(Stdio::piped());
 
         command
+    }
+
+    fn build_run_command<I: Image>(image: &RunnableImage<I>, command: Command) -> Command {
+        Client::run_command(image, command, true, image.args().clone())
     }
 
     fn create_network_if_not_exists(&self, name: &str) -> bool {
