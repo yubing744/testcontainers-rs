@@ -86,7 +86,7 @@ impl Cli {
         container
     }
 
-    pub fn run_cmd<I: Image>(&self, image: impl Into<RunnableImage<I>>, args: I::Args) -> Command {
+    pub fn run_cmd<I: Image>(&self, image: impl Into<RunnableImage<I>>) -> Command {
         let image = image.into();
 
         if let Some(network) = image.network() {
@@ -101,7 +101,7 @@ impl Cli {
             }
         }
 
-        Client::run_command(&image, self.inner.command(), false, args)
+        Client::run_command(&image, self.inner.command(), false)
     }
 }
 
@@ -168,7 +168,7 @@ impl Client {
         }
     }
 
-    fn run_command<I: Image>(image: &RunnableImage<I>, mut command: Command, is_daemon : bool, args: I::Args) -> Command {
+    fn run_command<I: Image>(image: &RunnableImage<I>, mut command: Command, is_daemon : bool) -> Command {
         command.arg("run");
 
         if image.privileged() {
@@ -231,14 +231,14 @@ impl Client {
 
         command
             .arg(image.descriptor())
-            .args(args.into_iterator())
+            .args(image.args().clone().into_iterator())
             .stdout(Stdio::piped());
 
         command
     }
 
     fn build_run_command<I: Image>(image: &RunnableImage<I>, command: Command) -> Command {
-        Client::run_command(image, command, true, image.args().clone())
+        Client::run_command(image, command, true)
     }
 
     fn create_network_if_not_exists(&self, name: &str) -> bool {
